@@ -19,6 +19,7 @@ create table if not exists public.businesses (
   published boolean not null default false,
   marketplace_enabled boolean not null default false,
   loyalty_enabled boolean not null default false,
+  theme jsonb not null default '{"color":"#4f46e5"}',
   created_at timestamptz not null default now()
 );
 create table if not exists public.business_members (
@@ -74,3 +75,6 @@ create policy "members manage loyalty" on public.loyalty_transactions for all us
 
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$ begin insert into public.profiles(id,full_name,avatar_url) values(new.id,new.raw_user_meta_data->>'full_name',new.raw_user_meta_data->>'avatar_url') on conflict do nothing; return new; end; $$;
 drop trigger if exists on_auth_user_created on auth.users;create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
+
+create or replace function public.handle_new_business() returns trigger language plpgsql security definer set search_path=public as $$ begin insert into public.business_members(business_id,user_id,role) values(new.id,new.owner_id,'owner') on conflict do nothing; return new; end; $$;
+drop trigger if exists on_business_created on public.businesses;create trigger on_business_created after insert on public.businesses for each row execute procedure public.handle_new_business();
