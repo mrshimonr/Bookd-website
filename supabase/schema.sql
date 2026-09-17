@@ -85,3 +85,8 @@ grant select, insert, update, delete on table public.profiles, public.businesses
 grant execute on function public.is_business_member(uuid) to anon, authenticated;
 grant execute on function public.handle_new_user() to authenticated;
 grant execute on function public.handle_new_business() to authenticated;
+
+insert into public.profiles (id, full_name, avatar_url)
+select id, raw_user_meta_data->>'full_name', raw_user_meta_data->>'avatar_url'
+from auth.users
+on conflict (id) do nothing;
