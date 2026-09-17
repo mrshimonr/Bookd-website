@@ -1,2 +1,2 @@
-import DashboardApp from "@/components/DashboardApp";
-export default function DashboardPage(){return <DashboardApp/>}
+import DashboardCore from "@/components/DashboardCore";
+export default function DashboardPage(){return <DashboardCore/>}
