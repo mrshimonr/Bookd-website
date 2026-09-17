@@ -17,6 +17,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase";
+import CalendarCRM from "@/components/CalendarCRM";
 type Business = {
   id: string;
   name: string;
@@ -131,15 +132,13 @@ export default function DashboardCore() {
   async function addService(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const d = new FormData(e.currentTarget);
-    const { error } = await supabase
-      .from("services")
-      .insert({
-        business_id: business!.id,
-        name: d.get("name"),
-        description: d.get("description"),
-        duration_minutes: Number(d.get("duration")),
-        price_cents: Math.round(Number(d.get("price")) * 100),
-      });
+    const { error } = await supabase.from("services").insert({
+      business_id: business!.id,
+      name: d.get("name"),
+      description: d.get("description"),
+      duration_minutes: Number(d.get("duration")),
+      price_cents: Math.round(Number(d.get("price")) * 100),
+    });
     if (error) return setNotice(error.message);
     setForm(null);
     setNotice("Service added");
@@ -148,14 +147,12 @@ export default function DashboardCore() {
   async function addCustomer(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const d = new FormData(e.currentTarget);
-    const { error } = await supabase
-      .from("customers")
-      .insert({
-        business_id: business!.id,
-        full_name: d.get("name"),
-        email: d.get("email"),
-        phone: d.get("phone"),
-      });
+    const { error } = await supabase.from("customers").insert({
+      business_id: business!.id,
+      full_name: d.get("name"),
+      email: d.get("email"),
+      phone: d.get("phone"),
+    });
     if (error) return setNotice(error.message);
     setForm(null);
     setNotice("Customer added");
@@ -168,17 +165,15 @@ export default function DashboardCore() {
     if (!service) return;
     const start = new Date(String(d.get("starts"))),
       end = new Date(start.getTime() + service.duration_minutes * 60000);
-    const { error } = await supabase
-      .from("bookings")
-      .insert({
-        business_id: business!.id,
-        service_id: service.id,
-        customer_id: d.get("customer"),
-        starts_at: start.toISOString(),
-        ends_at: end.toISOString(),
-        status: "confirmed",
-        total_cents: service.price_cents,
-      });
+    const { error } = await supabase.from("bookings").insert({
+      business_id: business!.id,
+      service_id: service.id,
+      customer_id: d.get("customer"),
+      starts_at: start.toISOString(),
+      ends_at: end.toISOString(),
+      status: "confirmed",
+      total_cents: service.price_cents,
+    });
     if (error) return setNotice(error.message);
     setForm(null);
     setNotice("Booking created");
@@ -309,10 +304,10 @@ function renderTab(
     );
   if (tab === "Calendar")
     return (
-      <section className="feature">
-        <h2>Upcoming calendar</h2>
-        <BookingList bookings={p.bookings} />
-      </section>
+      <CalendarCRM
+        businessId={p.business.id}
+        onNewBooking={() => p.open("booking")}
+      />
     );
   if (tab === "Bookings")
     return (

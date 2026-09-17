@@ -49,6 +49,7 @@ create table if not exists public.bookings (
   staff_id uuid references public.profiles(id), starts_at timestamptz not null, ends_at timestamptz not null,
   status text not null default 'pending' check (status in ('pending','confirmed','completed','cancelled','no_show')),
   payment_status text not null default 'unpaid' check (payment_status in ('unpaid','authorized','paid','refunded')),
+  deposit_cents int not null default 0,
   total_cents int not null default 0, stripe_payment_intent_id text, answers jsonb not null default '{}', notes text default '', created_at timestamptz not null default now()
 );
 create table if not exists public.loyalty_transactions (
