@@ -78,3 +78,10 @@ drop trigger if exists on_auth_user_created on auth.users;create trigger on_auth
 
 create or replace function public.handle_new_business() returns trigger language plpgsql security definer set search_path=public as $$ begin insert into public.business_members(business_id,user_id,role) values(new.id,new.owner_id,'owner') on conflict do nothing; return new; end; $$;
 drop trigger if exists on_business_created on public.businesses;create trigger on_business_created after insert on public.businesses for each row execute procedure public.handle_new_business();
+
+grant usage on schema public to anon, authenticated;
+grant select on table public.businesses, public.services, public.availability to anon;
+grant select, insert, update, delete on table public.profiles, public.businesses, public.business_members, public.services, public.customers, public.availability, public.bookings, public.loyalty_transactions to authenticated;
+grant execute on function public.is_business_member(uuid) to anon, authenticated;
+grant execute on function public.handle_new_user() to authenticated;
+grant execute on function public.handle_new_business() to authenticated;
