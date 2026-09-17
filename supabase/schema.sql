@@ -63,6 +63,7 @@ create policy "own profile" on public.profiles for all using(id=auth.uid()) with
 create policy "business members read" on public.businesses for select using(public.is_business_member(id) or published=true);
 create policy "owners create business" on public.businesses for insert with check(owner_id=auth.uid());
 create policy "members manage business" on public.businesses for update using(public.is_business_member(id));
+create policy "owners delete business" on public.businesses for delete using(owner_id=auth.uid());
 create policy "members read membership" on public.business_members for select using(user_id=auth.uid() or public.is_business_member(business_id));
 create policy "owners add membership" on public.business_members for insert with check(public.is_business_member(business_id));
 create policy "services public read" on public.services for select using(active=true or public.is_business_member(business_id));

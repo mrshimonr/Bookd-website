@@ -1,18 +1,603 @@
 "use client";
-import Link from "next/link";import {FormEvent,useEffect,useState} from "react";import {useRouter} from "next/navigation";import {CalendarDays,ChartNoAxesCombined,ClipboardList,CreditCard,Gift,LayoutDashboard,LogOut,Settings,Store,Users,UsersRound,Wrench} from "lucide-react";import {getSupabaseBrowser} from "@/lib/supabase";
-type Business={id:string;name:string;slug:string;description:string;published:boolean;theme:{color?:string}};type Service={id:string;name:string;description:string;duration_minutes:number;price_cents:number;active:boolean};type Customer={id:string;full_name:string;email:string|null;phone:string|null};type Booking={id:string;starts_at:string;status:string;total_cents:number;customers:{full_name:string}|null;services:{name:string}|null};
-const nav=[[LayoutDashboard,"Overview"],[CalendarDays,"Calendar"],[ClipboardList,"Bookings"],[Wrench,"Services"],[Users,"Customers"],[UsersRound,"Staff"],[Store,"Booking site"],[Gift,"Loyalty"],[ChartNoAxesCombined,"Reports"],[CreditCard,"Payments"],[Settings,"Settings"]];
-export default function DashboardCore(){const supabase=getSupabaseBrowser(),router=useRouter();const[business,setBusiness]=useState<Business|null>(null),[services,setServices]=useState<Service[]>([]),[customers,setCustomers]=useState<Customer[]>([]),[bookings,setBookings]=useState<Booking[]>([]),[loading,setLoading]=useState(true),[tab,setTab]=useState("Overview"),[form,setForm]=useState<string|null>(null),[notice,setNotice]=useState("");
-async function load(){const{data:{user}}=await supabase.auth.getUser();if(!user){router.replace("/login");return}const{data:b}=await supabase.from("businesses").select("id,name,slug,description,published,theme").eq("owner_id",user.id).limit(1).maybeSingle();if(!b){router.replace("/onboarding");return}setBusiness(b);const[{data:s},{data:c},{data:k}]=await Promise.all([supabase.from("services").select("*").eq("business_id",b.id).order("created_at"),supabase.from("customers").select("id,full_name,email,phone").eq("business_id",b.id).order("created_at",{ascending:false}),supabase.from("bookings").select("id,starts_at,status,total_cents,customers(full_name),services(name)").eq("business_id",b.id).order("starts_at")]);setServices((s||[]) as Service[]);setCustomers((c||[]) as Customer[]);setBookings((k||[]) as unknown as Booking[]);setLoading(false)}useEffect(()=>{load()},[]);async function logout(){await supabase.auth.signOut();router.replace("/")}function open(name:string){setForm(name);setNotice("")}
-async function addService(e:FormEvent<HTMLFormElement>){e.preventDefault();const d=new FormData(e.currentTarget);const{error}=await supabase.from("services").insert({business_id:business!.id,name:d.get("name"),description:d.get("description"),duration_minutes:Number(d.get("duration")),price_cents:Math.round(Number(d.get("price"))*100)});if(error)return setNotice(error.message);setForm(null);setNotice("Service added");await load()}
-async function addCustomer(e:FormEvent<HTMLFormElement>){e.preventDefault();const d=new FormData(e.currentTarget);const{error}=await supabase.from("customers").insert({business_id:business!.id,full_name:d.get("name"),email:d.get("email"),phone:d.get("phone")});if(error)return setNotice(error.message);setForm(null);setNotice("Customer added");await load()}
-async function addBooking(e:FormEvent<HTMLFormElement>){e.preventDefault();const d=new FormData(e.currentTarget),service=services.find(s=>s.id===d.get("service"));if(!service)return;const start=new Date(String(d.get("starts"))),end=new Date(start.getTime()+service.duration_minutes*60000);const{error}=await supabase.from("bookings").insert({business_id:business!.id,service_id:service.id,customer_id:d.get("customer"),starts_at:start.toISOString(),ends_at:end.toISOString(),status:"confirmed",total_cents:service.price_cents});if(error)return setNotice(error.message);setForm(null);setNotice("Booking created");await load()}
-async function saveSite(e:FormEvent<HTMLFormElement>){e.preventDefault();const d=new FormData(e.currentTarget);const{error}=await supabase.from("businesses").update({name:d.get("name"),description:d.get("description"),theme:{color:d.get("color")},published:d.get("published")==="on"}).eq("id",business!.id);if(error)return setNotice(error.message);setNotice("Booking site saved");await load()}
-if(loading)return <main className="wizard-wrap"><div className="wizard-card"><div className="loader"/><p>Loading your business…</p></div></main>;
-return <main className="app-shell"><aside className="app-sidebar"><Link href="/" className="brand"><span className="brand-mark">B</span>Bookd</Link><div className="business-chip"><small>BUSINESS</small><b>{business?.name}</b></div>{nav.map(([Icon,label])=><button onClick={()=>{setTab(label as string);setForm(null);setNotice("")}} className={tab===label?"app-nav active":"app-nav"} key={label as string}><Icon size={17}/>{label as string}</button>)}<button className="app-nav logout" onClick={logout}><LogOut size={17}/>Log out</button></aside><section className="app-main"><header className="app-header"><div><span>{business?.name}</span><h1>{tab}</h1></div><div className="actions"><Link className="btn btn-secondary" target="_blank" href={`/b/${business?.slug}`}>View booking site</Link><button className="btn btn-primary" onClick={()=>open("booking")}>+ New booking</button></div></header>{notice&&<div className="notice">{notice}</div>}{form&&<Editor type={form} close={()=>setForm(null)} addService={addService} addCustomer={addCustomer} addBooking={addBooking} services={services} customers={customers}/>} {!form&&renderTab(tab,{business:business!,services,customers,bookings,open,saveSite})}</section></main>}
-function renderTab(tab:string,p:{business:Business;services:Service[];customers:Customer[];bookings:Booking[];open:(x:string)=>void;saveSite:(e:FormEvent<HTMLFormElement>)=>void}){if(tab==="Overview")return <><Metrics bookings={p.bookings} customers={p.customers} services={p.services}/><div className="dash-columns"><BookingList bookings={p.bookings}/><Checklist p={p}/></div></>;if(tab==="Calendar")return <section className="feature"><h2>Upcoming calendar</h2><BookingList bookings={p.bookings}/></section>;if(tab==="Bookings")return <section><button className="btn btn-primary" onClick={()=>p.open("booking")}>+ Create booking</button><BookingList bookings={p.bookings}/></section>;if(tab==="Services")return <section><button className="btn btn-primary" onClick={()=>p.open("service")}>+ Add service</button><div className="record-grid">{p.services.map(s=><article className="feature" key={s.id}><h3>{s.name}</h3><p>{s.description||"No description"}</p><b>{s.duration_minutes} min · ${(s.price_cents/100).toFixed(2)}</b></article>)}</div></section>;if(tab==="Customers")return <section><button className="btn btn-primary" onClick={()=>p.open("customer")}>+ Add customer</button><div className="record-grid">{p.customers.map(c=><article className="feature" key={c.id}><h3>{c.full_name}</h3><p>{c.email||"No email"}</p><span>{c.phone||"No phone"}</span></article>)}</div></section>;if(tab==="Booking site"||tab==="Settings")return <SiteEditor business={p.business} save={p.saveSite}/>;return <article className="feature module-empty"><div className="empty-icon"><span>＋</span></div><h2>{tab}</h2><p>This module is ready for the next Bookd development stage. The core booking tools are available now.</p></article>}
-function Metrics({bookings,customers,services}:{bookings:Booking[];customers:Customer[];services:Service[]}){const revenue=bookings.filter(b=>b.status!=="cancelled").reduce((n,b)=>n+b.total_cents,0);return <div className="real-metrics">{[["Bookings",bookings.length,"Real bookings"],["Revenue",`$${(revenue/100).toFixed(2)}`,"Booked value"],["Customers",customers.length,"Customer records"],["Services",services.length,"Active services"]].map(x=><article className="feature" key={x[0]}><small>{x[0]}</small><b>{x[1]}</b><span>{x[2]}</span></article>)}</div>}
-function BookingList({bookings}:{bookings:Booking[]}){return <article className="feature"><h3>Bookings</h3>{bookings.length===0?<div className="empty-small">No bookings yet. Create one or share your booking site.</div>:bookings.map(b=><div className="booking-record" key={b.id}><b>{new Date(b.starts_at).toLocaleString()}</b><span>{b.customers?.full_name}</span><span>{b.services?.name}</span><em>{b.status}</em></div>)}</article>}
-function Checklist({p}:{p:{services:Service[];business:Business;open:(x:string)=>void}}){return <article className="feature"><h3>Launch checklist</h3>{[[true,"Business created"],[p.services.length>0,"Add services"],[p.business.published,"Publish booking site"]].map(([done,label],i)=><div className="check-row" key={label as string}><span className={done?"done":""}>{done?"✓":i+1}</span>{label as string}</div>)}<button className="btn btn-secondary" onClick={()=>p.open("service")}>Add another service</button></article>}
-function Editor({type,close,addService,addCustomer,addBooking,services,customers}:{type:string;close:()=>void;addService:(e:FormEvent<HTMLFormElement>)=>void;addCustomer:(e:FormEvent<HTMLFormElement>)=>void;addBooking:(e:FormEvent<HTMLFormElement>)=>void;services:Service[];customers:Customer[]}){const submit=type==="service"?addService:type==="customer"?addCustomer:addBooking;return <form className="feature editor" onSubmit={submit}><h2>{type==="service"?"Add service":type==="customer"?"Add customer":"Create booking"}</h2>{type==="service"&&<><label className="field">Service name<input name="name" required/></label><label className="field">Description<textarea name="description"/></label><div className="field-row"><label className="field">Minutes<input name="duration" type="number" defaultValue="60" required/></label><label className="field">Price<input name="price" type="number" step=".01" required/></label></div></>}{type==="customer"&&<><label className="field">Full name<input name="name" required/></label><label className="field">Email<input name="email" type="email"/></label><label className="field">Phone<input name="phone"/></label></>}{type==="booking"&&<><label className="field">Customer<select name="customer" required>{customers.map(c=><option value={c.id} key={c.id}>{c.full_name}</option>)}</select></label><label className="field">Service<select name="service" required>{services.map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select></label><label className="field">Date and time<input name="starts" type="datetime-local" required/></label>{customers.length===0&&<p className="form-message">Add a customer first.</p>}</>}<div className="actions"><button type="button" className="btn btn-secondary" onClick={close}>Cancel</button><button className="btn btn-primary" disabled={type==="booking"&&customers.length===0}>Save</button></div></form>}
-function SiteEditor({business,save}:{business:Business;save:(e:FormEvent<HTMLFormElement>)=>void}){return <form className="feature editor" onSubmit={save}><h2>Booking site editor</h2><label className="field">Business name<input name="name" defaultValue={business.name}/></label><label className="field">Description<textarea name="description" defaultValue={business.description}/></label><label className="field">Brand color<input name="color" type="color" defaultValue={business.theme?.color||"#4f46e5"}/></label><label className="toggle"><input name="published" type="checkbox" defaultChecked={business.published}/> Publicly published</label><button className="btn btn-primary">Save website</button></form>}
+import Link from "next/link";
+import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  CalendarDays,
+  ChartNoAxesCombined,
+  ClipboardList,
+  CreditCard,
+  Gift,
+  LayoutDashboard,
+  LogOut,
+  Settings,
+  Store,
+  Users,
+  UsersRound,
+  Wrench,
+} from "lucide-react";
+import { getSupabaseBrowser } from "@/lib/supabase";
+type Business = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  published: boolean;
+  theme: { color?: string };
+};
+type Service = {
+  id: string;
+  name: string;
+  description: string;
+  duration_minutes: number;
+  price_cents: number;
+  active: boolean;
+};
+type Customer = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+};
+type Booking = {
+  id: string;
+  starts_at: string;
+  status: string;
+  total_cents: number;
+  customers: { full_name: string } | null;
+  services: { name: string } | null;
+};
+const nav = [
+  [LayoutDashboard, "Overview"],
+  [CalendarDays, "Calendar"],
+  [ClipboardList, "Bookings"],
+  [Wrench, "Services"],
+  [Users, "Customers"],
+  [UsersRound, "Staff"],
+  [Store, "Booking site"],
+  [Gift, "Loyalty"],
+  [ChartNoAxesCombined, "Reports"],
+  [CreditCard, "Payments"],
+  [Settings, "Settings"],
+];
+export default function DashboardCore() {
+  const supabase = getSupabaseBrowser(),
+    router = useRouter();
+  const [business, setBusiness] = useState<Business | null>(null),
+    [services, setServices] = useState<Service[]>([]),
+    [customers, setCustomers] = useState<Customer[]>([]),
+    [bookings, setBookings] = useState<Booking[]>([]),
+    [loading, setLoading] = useState(true),
+    [tab, setTab] = useState("Overview"),
+    [form, setForm] = useState<string | null>(null),
+    [notice, setNotice] = useState("");
+  async function load() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    const selectedId = new URLSearchParams(window.location.search).get(
+      "business",
+    );
+    let businessQuery = supabase
+      .from("businesses")
+      .select("id,name,slug,description,published,theme")
+      .eq("owner_id", user.id);
+    if (selectedId) businessQuery = businessQuery.eq("id", selectedId);
+    const { data: b } = await businessQuery.limit(1).maybeSingle();
+    if (!b) {
+      router.replace("/account");
+      return;
+    }
+    setBusiness(b);
+    const [{ data: s }, { data: c }, { data: k }] = await Promise.all([
+      supabase
+        .from("services")
+        .select("*")
+        .eq("business_id", b.id)
+        .order("created_at"),
+      supabase
+        .from("customers")
+        .select("id,full_name,email,phone")
+        .eq("business_id", b.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("bookings")
+        .select(
+          "id,starts_at,status,total_cents,customers(full_name),services(name)",
+        )
+        .eq("business_id", b.id)
+        .order("starts_at"),
+    ]);
+    setServices((s || []) as Service[]);
+    setCustomers((c || []) as Customer[]);
+    setBookings((k || []) as unknown as Booking[]);
+    setLoading(false);
+  }
+  useEffect(() => {
+    load();
+  }, []);
+  async function logout() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
+  function open(name: string) {
+    setForm(name);
+    setNotice("");
+  }
+  async function addService(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const d = new FormData(e.currentTarget);
+    const { error } = await supabase
+      .from("services")
+      .insert({
+        business_id: business!.id,
+        name: d.get("name"),
+        description: d.get("description"),
+        duration_minutes: Number(d.get("duration")),
+        price_cents: Math.round(Number(d.get("price")) * 100),
+      });
+    if (error) return setNotice(error.message);
+    setForm(null);
+    setNotice("Service added");
+    await load();
+  }
+  async function addCustomer(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const d = new FormData(e.currentTarget);
+    const { error } = await supabase
+      .from("customers")
+      .insert({
+        business_id: business!.id,
+        full_name: d.get("name"),
+        email: d.get("email"),
+        phone: d.get("phone"),
+      });
+    if (error) return setNotice(error.message);
+    setForm(null);
+    setNotice("Customer added");
+    await load();
+  }
+  async function addBooking(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const d = new FormData(e.currentTarget),
+      service = services.find((s) => s.id === d.get("service"));
+    if (!service) return;
+    const start = new Date(String(d.get("starts"))),
+      end = new Date(start.getTime() + service.duration_minutes * 60000);
+    const { error } = await supabase
+      .from("bookings")
+      .insert({
+        business_id: business!.id,
+        service_id: service.id,
+        customer_id: d.get("customer"),
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+        status: "confirmed",
+        total_cents: service.price_cents,
+      });
+    if (error) return setNotice(error.message);
+    setForm(null);
+    setNotice("Booking created");
+    await load();
+  }
+  async function saveSite(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const d = new FormData(e.currentTarget);
+    const { error } = await supabase
+      .from("businesses")
+      .update({
+        name: d.get("name"),
+        description: d.get("description"),
+        theme: { color: d.get("color") },
+        published: d.get("published") === "on",
+      })
+      .eq("id", business!.id);
+    if (error) return setNotice(error.message);
+    setNotice("Booking site saved");
+    await load();
+  }
+  if (loading)
+    return (
+      <main className="wizard-wrap">
+        <div className="wizard-card">
+          <div className="loader" />
+          <p>Loading your business…</p>
+        </div>
+      </main>
+    );
+  return (
+    <main className="app-shell">
+      <aside className="app-sidebar">
+        <Link href="/account" className="brand" title="My businesses">
+          <span className="brand-mark">B</span>Bookd
+        </Link>
+        <div className="business-chip">
+          <small>BUSINESS</small>
+          <b>{business?.name}</b>
+        </div>
+        {nav.map(([Icon, label]) => (
+          <button
+            onClick={() => {
+              setTab(label as string);
+              setForm(null);
+              setNotice("");
+            }}
+            className={tab === label ? "app-nav active" : "app-nav"}
+            key={label as string}
+          >
+            <Icon size={17} />
+            {label as string}
+          </button>
+        ))}
+        <button className="app-nav logout" onClick={logout}>
+          <LogOut size={17} />
+          Log out
+        </button>
+      </aside>
+      <section className="app-main">
+        <header className="app-header">
+          <div>
+            <span>{business?.name}</span>
+            <h1>{tab}</h1>
+          </div>
+          <div className="actions">
+            <Link
+              className="btn btn-secondary"
+              target="_blank"
+              href={`/b/${business?.slug}`}
+            >
+              View booking site
+            </Link>
+            <button className="btn btn-primary" onClick={() => open("booking")}>
+              + New booking
+            </button>
+          </div>
+        </header>
+        {notice && <div className="notice">{notice}</div>}
+        {form && (
+          <Editor
+            type={form}
+            close={() => setForm(null)}
+            addService={addService}
+            addCustomer={addCustomer}
+            addBooking={addBooking}
+            services={services}
+            customers={customers}
+          />
+        )}{" "}
+        {!form &&
+          renderTab(tab, {
+            business: business!,
+            services,
+            customers,
+            bookings,
+            open,
+            saveSite,
+          })}
+      </section>
+    </main>
+  );
+}
+function renderTab(
+  tab: string,
+  p: {
+    business: Business;
+    services: Service[];
+    customers: Customer[];
+    bookings: Booking[];
+    open: (x: string) => void;
+    saveSite: (e: FormEvent<HTMLFormElement>) => void;
+  },
+) {
+  if (tab === "Overview")
+    return (
+      <>
+        <Metrics
+          bookings={p.bookings}
+          customers={p.customers}
+          services={p.services}
+        />
+        <div className="dash-columns">
+          <BookingList bookings={p.bookings} />
+          <Checklist p={p} />
+        </div>
+      </>
+    );
+  if (tab === "Calendar")
+    return (
+      <section className="feature">
+        <h2>Upcoming calendar</h2>
+        <BookingList bookings={p.bookings} />
+      </section>
+    );
+  if (tab === "Bookings")
+    return (
+      <section>
+        <button className="btn btn-primary" onClick={() => p.open("booking")}>
+          + Create booking
+        </button>
+        <BookingList bookings={p.bookings} />
+      </section>
+    );
+  if (tab === "Services")
+    return (
+      <section>
+        <button className="btn btn-primary" onClick={() => p.open("service")}>
+          + Add service
+        </button>
+        <div className="record-grid">
+          {p.services.map((s) => (
+            <article className="feature" key={s.id}>
+              <h3>{s.name}</h3>
+              <p>{s.description || "No description"}</p>
+              <b>
+                {s.duration_minutes} min · ${(s.price_cents / 100).toFixed(2)}
+              </b>
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  if (tab === "Customers")
+    return (
+      <section>
+        <button className="btn btn-primary" onClick={() => p.open("customer")}>
+          + Add customer
+        </button>
+        <div className="record-grid">
+          {p.customers.map((c) => (
+            <article className="feature" key={c.id}>
+              <h3>{c.full_name}</h3>
+              <p>{c.email || "No email"}</p>
+              <span>{c.phone || "No phone"}</span>
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  if (tab === "Booking site" || tab === "Settings")
+    return <SiteEditor business={p.business} save={p.saveSite} />;
+  return (
+    <article className="feature module-empty">
+      <div className="empty-icon">
+        <span>＋</span>
+      </div>
+      <h2>{tab}</h2>
+      <p>
+        This module is ready for the next Bookd development stage. The core
+        booking tools are available now.
+      </p>
+    </article>
+  );
+}
+function Metrics({
+  bookings,
+  customers,
+  services,
+}: {
+  bookings: Booking[];
+  customers: Customer[];
+  services: Service[];
+}) {
+  const revenue = bookings
+    .filter((b) => b.status !== "cancelled")
+    .reduce((n, b) => n + b.total_cents, 0);
+  return (
+    <div className="real-metrics">
+      {[
+        ["Bookings", bookings.length, "Real bookings"],
+        ["Revenue", `$${(revenue / 100).toFixed(2)}`, "Booked value"],
+        ["Customers", customers.length, "Customer records"],
+        ["Services", services.length, "Active services"],
+      ].map((x) => (
+        <article className="feature" key={x[0]}>
+          <small>{x[0]}</small>
+          <b>{x[1]}</b>
+          <span>{x[2]}</span>
+        </article>
+      ))}
+    </div>
+  );
+}
+function BookingList({ bookings }: { bookings: Booking[] }) {
+  return (
+    <article className="feature">
+      <h3>Bookings</h3>
+      {bookings.length === 0 ? (
+        <div className="empty-small">
+          No bookings yet. Create one or share your booking site.
+        </div>
+      ) : (
+        bookings.map((b) => (
+          <div className="booking-record" key={b.id}>
+            <b>{new Date(b.starts_at).toLocaleString()}</b>
+            <span>{b.customers?.full_name}</span>
+            <span>{b.services?.name}</span>
+            <em>{b.status}</em>
+          </div>
+        ))
+      )}
+    </article>
+  );
+}
+function Checklist({
+  p,
+}: {
+  p: { services: Service[]; business: Business; open: (x: string) => void };
+}) {
+  return (
+    <article className="feature">
+      <h3>Launch checklist</h3>
+      {[
+        [true, "Business created"],
+        [p.services.length > 0, "Add services"],
+        [p.business.published, "Publish booking site"],
+      ].map(([done, label], i) => (
+        <div className="check-row" key={label as string}>
+          <span className={done ? "done" : ""}>{done ? "✓" : i + 1}</span>
+          {label as string}
+        </div>
+      ))}
+      <button className="btn btn-secondary" onClick={() => p.open("service")}>
+        Add another service
+      </button>
+    </article>
+  );
+}
+function Editor({
+  type,
+  close,
+  addService,
+  addCustomer,
+  addBooking,
+  services,
+  customers,
+}: {
+  type: string;
+  close: () => void;
+  addService: (e: FormEvent<HTMLFormElement>) => void;
+  addCustomer: (e: FormEvent<HTMLFormElement>) => void;
+  addBooking: (e: FormEvent<HTMLFormElement>) => void;
+  services: Service[];
+  customers: Customer[];
+}) {
+  const submit =
+    type === "service"
+      ? addService
+      : type === "customer"
+        ? addCustomer
+        : addBooking;
+  return (
+    <form className="feature editor" onSubmit={submit}>
+      <h2>
+        {type === "service"
+          ? "Add service"
+          : type === "customer"
+            ? "Add customer"
+            : "Create booking"}
+      </h2>
+      {type === "service" && (
+        <>
+          <label className="field">
+            Service name
+            <input name="name" required />
+          </label>
+          <label className="field">
+            Description
+            <textarea name="description" />
+          </label>
+          <div className="field-row">
+            <label className="field">
+              Minutes
+              <input name="duration" type="number" defaultValue="60" required />
+            </label>
+            <label className="field">
+              Price
+              <input name="price" type="number" step=".01" required />
+            </label>
+          </div>
+        </>
+      )}
+      {type === "customer" && (
+        <>
+          <label className="field">
+            Full name
+            <input name="name" required />
+          </label>
+          <label className="field">
+            Email
+            <input name="email" type="email" />
+          </label>
+          <label className="field">
+            Phone
+            <input name="phone" />
+          </label>
+        </>
+      )}
+      {type === "booking" && (
+        <>
+          <label className="field">
+            Customer
+            <select name="customer" required>
+              {customers.map((c) => (
+                <option value={c.id} key={c.id}>
+                  {c.full_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Service
+            <select name="service" required>
+              {services.map((s) => (
+                <option value={s.id} key={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Date and time
+            <input name="starts" type="datetime-local" required />
+          </label>
+          {customers.length === 0 && (
+            <p className="form-message">Add a customer first.</p>
+          )}
+        </>
+      )}
+      <div className="actions">
+        <button type="button" className="btn btn-secondary" onClick={close}>
+          Cancel
+        </button>
+        <button
+          className="btn btn-primary"
+          disabled={type === "booking" && customers.length === 0}
+        >
+          Save
+        </button>
+      </div>
+    </form>
+  );
+}
+function SiteEditor({
+  business,
+  save,
+}: {
+  business: Business;
+  save: (e: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="feature editor" onSubmit={save}>
+      <h2>Booking site editor</h2>
+      <label className="field">
+        Business name
+        <input name="name" defaultValue={business.name} />
+      </label>
+      <label className="field">
+        Description
+        <textarea name="description" defaultValue={business.description} />
+      </label>
+      <label className="field">
+        Brand color
+        <input
+          name="color"
+          type="color"
+          defaultValue={business.theme?.color || "#4f46e5"}
+        />
+      </label>
+      <label className="toggle">
+        <input
+          name="published"
+          type="checkbox"
+          defaultChecked={business.published}
+        />{" "}
+        Publicly published
+      </label>
+      <button className="btn btn-primary">Save website</button>
+    </form>
+  );
+}

@@ -1,10 +1,348 @@
 "use client";
-import {FormEvent,useEffect,useState} from "react";import {useRouter} from "next/navigation";import {getSupabaseBrowser} from "@/lib/supabase";import {ArrowLeft,ArrowRight,Check,Sparkles} from "lucide-react";
-const categories=[{id:"services",title:"Service business",copy:"Cleaning, contractors, repairs and home services"},{id:"appointments",title:"Appointments",copy:"Beauty, wellness, doctors and therapists"},{id:"events",title:"Events & classes",copy:"Classes, programs, parties and tickets"},{id:"transportation",title:"Transportation",copy:"Car services, routes and reservations"}];
-const colors=["#4f46e5","#0f766e","#c2410c","#be185d","#1d4ed8","#171717"];
-export default function OnboardingWizard(){const router=useRouter(),supabase=getSupabaseBrowser();const[step,setStep]=useState(1),[busy,setBusy]=useState(true),[error,setError]=useState("");const[data,setData]=useState({name:"",category:"",description:"",service:"",duration:"60",price:"",slug:"",color:"#4f46e5"});
-useEffect(()=>{supabase.auth.getUser().then(async({data:{user}})=>{if(!user){router.replace("/login");return}const{data:existing}=await supabase.from("businesses").select("id").eq("owner_id",user.id).limit(1);if(existing?.length)router.replace("/dashboard");else setBusy(false)})},[]);
-function update(k:string,v:string){setData(d=>({...d,[k]:v,...(k==="name"&&!d.slug?{slug:v.toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"")}: {})}))}
-async function finish(e:FormEvent){e.preventDefault();setBusy(true);setError("");const{data:{user}}=await supabase.auth.getUser();if(!user){router.replace("/login");return}const{data:business,error:businessError}=await supabase.from("businesses").insert({owner_id:user.id,name:data.name,slug:data.slug,category:data.category,description:data.description,theme:{color:data.color},published:true}).select("id").single();if(businessError){setError(businessError.message);setBusy(false);return}const price=Math.round(Number(data.price||0)*100);const{error:serviceError}=await supabase.from("services").insert({business_id:business.id,name:data.service,duration_minutes:Number(data.duration),price_cents:price});if(serviceError){setError(serviceError.message);setBusy(false);return}router.replace("/dashboard");router.refresh()}
-if(busy&&step===1)return <main className="wizard-wrap"><div className="wizard-card"><div className="loader"/><p>Preparing your Bookd workspace…</p></div></main>;
-return <main className="wizard-wrap"><section className="wizard-card"><div className="wizard-logo"><span className="brand-mark">B</span><b>Bookd</b></div><div className="steps">{[1,2,3,4].map(n=><span key={n} className={n<=step?"on":""}>{n<step?<Check size={14}/>:n}</span>)}</div>{step===1&&<div><span className="eyebrow"><Sparkles size={14}/> Let’s build your Bookd</span><h1>What kind of business do you run?</h1><p className="wizard-sub">This gives you the right booking tools. You can customize everything later.</p><div className="choice-grid">{categories.map(c=><button className={data.category===c.id?"choice selected":"choice"} key={c.id} onClick={()=>update("category",c.id)}><b>{c.title}</b><small>{c.copy}</small></button>)}</div></div>}{step===2&&<div><h1>Tell us about your business</h1><p className="wizard-sub">This information becomes the start of your public booking website.</p><label className="field">Business name<input value={data.name} onChange={e=>update("name",e.target.value)} placeholder="Example: Shimon's Cleaning"/></label><label className="field">Short description<textarea value={data.description} onChange={e=>update("description",e.target.value)} placeholder="Tell customers what makes your business special"/></label><label className="field">Your Bookd address<div className="slug"><span>bookd.com/</span><input value={data.slug} onChange={e=>update("slug",e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,""))}/></div></label></div>}{step===3&&<div><h1>Add your first service</h1><p className="wizard-sub">Customers will select this when they book. More services can be added later.</p><label className="field">Service name<input value={data.service} onChange={e=>update("service",e.target.value)} placeholder="Example: Deep cleaning"/></label><div className="field-row"><label className="field">Duration<select value={data.duration} onChange={e=>update("duration",e.target.value)}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></label><label className="field">Price ($)<input type="number" min="0" value={data.price} onChange={e=>update("price",e.target.value)} placeholder="0.00"/></label></div></div>}{step===4&&<form onSubmit={finish}><h1>Choose your website style</h1><p className="wizard-sub">Start with a brand color. The full website editor will be available in your dashboard.</p><div className="color-row">{colors.map(c=><button type="button" aria-label={c} key={c} onClick={()=>update("color",c)} className={data.color===c?"color selected":"color"} style={{background:c}}/>)}</div><div className="site-preview" style={{"--preview":data.color} as React.CSSProperties}><div><small>WELCOME TO</small><h2>{data.name||"Your business"}</h2><p>{data.description||"Professional service, simple online booking."}</p><button type="button">Book now</button></div><div className="preview-service"><small>POPULAR SERVICE</small><b>{data.service||"Your first service"}</b><span>{data.duration} min · ${data.price||"0"}</span></div></div>{error&&<div className="form-message">{error}</div>}</form>}<footer className="wizard-actions">{step>1?<button className="btn btn-secondary" onClick={()=>setStep(s=>s-1)}><ArrowLeft size={16}/> Back</button>:<span/>}<button className="btn btn-primary" disabled={(step===1&&!data.category)||(step===2&&(!data.name||!data.slug))||(step===3&&!data.service)||busy} onClick={step===4?()=>{const form=document.querySelector("form");form?.requestSubmit()}:()=>setStep(s=>s+1)}>{step===4?(busy?"Creating…":"Create my Bookd site"):<>Continue <ArrowRight size={16}/></>}</button></footer></section></main>}
+import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { getSupabaseBrowser } from "@/lib/supabase";
+import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
+const categories = [
+  {
+    id: "services",
+    title: "Service business",
+    copy: "Cleaning, contractors, repairs and home services",
+  },
+  {
+    id: "appointments",
+    title: "Appointments",
+    copy: "Beauty, wellness, doctors and therapists",
+  },
+  {
+    id: "events",
+    title: "Events & classes",
+    copy: "Classes, programs, parties and tickets",
+  },
+  {
+    id: "transportation",
+    title: "Transportation",
+    copy: "Car services, routes and reservations",
+  },
+];
+const colors = [
+  "#4f46e5",
+  "#0f766e",
+  "#c2410c",
+  "#be185d",
+  "#1d4ed8",
+  "#171717",
+];
+export default function OnboardingWizard() {
+  const router = useRouter(),
+    supabase = getSupabaseBrowser();
+  const [step, setStep] = useState(1),
+    [busy, setBusy] = useState(true),
+    [error, setError] = useState("");
+  const [data, setData] = useState({
+    name: "",
+    category: "",
+    description: "",
+    service: "",
+    duration: "60",
+    price: "",
+    slug: "",
+    color: "#4f46e5",
+  });
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+      const creatingNew =
+        new URLSearchParams(window.location.search).get("new") === "1";
+      const { data: existing } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", user.id)
+        .limit(1);
+      if (existing?.length && !creatingNew) router.replace("/account");
+      else setBusy(false);
+    });
+  }, []);
+  function update(k: string, v: string) {
+    setData((d) => ({
+      ...d,
+      [k]: v,
+      ...(k === "name" && !d.slug
+        ? {
+            slug: v
+              .toLowerCase()
+              .trim()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/(^-|-$)/g, ""),
+          }
+        : {}),
+    }));
+  }
+  async function finish(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    const { data: business, error: businessError } = await supabase
+      .from("businesses")
+      .insert({
+        owner_id: user.id,
+        name: data.name,
+        slug: data.slug,
+        category: data.category,
+        description: data.description,
+        theme: { color: data.color },
+        published: true,
+      })
+      .select("id")
+      .single();
+    if (businessError) {
+      setError(businessError.message);
+      setBusy(false);
+      return;
+    }
+    const price = Math.round(Number(data.price || 0) * 100);
+    const { error: serviceError } = await supabase
+      .from("services")
+      .insert({
+        business_id: business.id,
+        name: data.service,
+        duration_minutes: Number(data.duration),
+        price_cents: price,
+      });
+    if (serviceError) {
+      setError(serviceError.message);
+      setBusy(false);
+      return;
+    }
+    router.replace(`/dashboard?business=${business.id}`);
+    router.refresh();
+  }
+  if (busy && step === 1)
+    return (
+      <main className="wizard-wrap">
+        <div className="wizard-card">
+          <div className="loader" />
+          <p>Preparing your Bookd workspace…</p>
+        </div>
+      </main>
+    );
+  return (
+    <main className="wizard-wrap">
+      <section className="wizard-card">
+        <Link href="/account" className="wizard-logo">
+          <span className="brand-mark">B</span>
+          <b>Bookd</b>
+        </Link>
+        <div className="steps">
+          {[1, 2, 3, 4].map((n) => (
+            <span key={n} className={n <= step ? "on" : ""}>
+              {n < step ? <Check size={14} /> : n}
+            </span>
+          ))}
+        </div>
+        {step === 1 && (
+          <div>
+            <span className="eyebrow">
+              <Sparkles size={14} /> Let’s build your Bookd
+            </span>
+            <h1>What kind of business do you run?</h1>
+            <p className="wizard-sub">
+              This gives you the right booking tools. You can customize
+              everything later.
+            </p>
+            <div className="choice-grid">
+              {categories.map((c) => (
+                <button
+                  className={
+                    data.category === c.id ? "choice selected" : "choice"
+                  }
+                  key={c.id}
+                  onClick={() => update("category", c.id)}
+                >
+                  <b>{c.title}</b>
+                  <small>{c.copy}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {step === 2 && (
+          <div>
+            <h1>Tell us about your business</h1>
+            <p className="wizard-sub">
+              This information becomes the start of your public booking website.
+            </p>
+            <label className="field">
+              Business name
+              <input
+                value={data.name}
+                onChange={(e) => update("name", e.target.value)}
+                placeholder="Example: Shimon's Cleaning"
+              />
+            </label>
+            <label className="field">
+              Short description
+              <textarea
+                value={data.description}
+                onChange={(e) => update("description", e.target.value)}
+                placeholder="Tell customers what makes your business special"
+              />
+            </label>
+            <label className="field">
+              Your Bookd address
+              <div className="slug">
+                <span>bookd.com/</span>
+                <input
+                  value={data.slug}
+                  onChange={(e) =>
+                    update(
+                      "slug",
+                      e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+                    )
+                  }
+                />
+              </div>
+            </label>
+          </div>
+        )}
+        {step === 3 && (
+          <div>
+            <h1>Add your first service</h1>
+            <p className="wizard-sub">
+              Customers will select this when they book. More services can be
+              added later.
+            </p>
+            <label className="field">
+              Service name
+              <input
+                value={data.service}
+                onChange={(e) => update("service", e.target.value)}
+                placeholder="Example: Deep cleaning"
+              />
+            </label>
+            <div className="field-row">
+              <label className="field">
+                Duration
+                <select
+                  value={data.duration}
+                  onChange={(e) => update("duration", e.target.value)}
+                >
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="90">1.5 hours</option>
+                  <option value="120">2 hours</option>
+                </select>
+              </label>
+              <label className="field">
+                Price ($)
+                <input
+                  type="number"
+                  min="0"
+                  value={data.price}
+                  onChange={(e) => update("price", e.target.value)}
+                  placeholder="0.00"
+                />
+              </label>
+            </div>
+          </div>
+        )}
+        {step === 4 && (
+          <form onSubmit={finish}>
+            <h1>Choose your website style</h1>
+            <p className="wizard-sub">
+              Start with a brand color. The full website editor will be
+              available in your dashboard.
+            </p>
+            <div className="color-row">
+              {colors.map((c) => (
+                <button
+                  type="button"
+                  aria-label={c}
+                  key={c}
+                  onClick={() => update("color", c)}
+                  className={data.color === c ? "color selected" : "color"}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
+            <div
+              className="site-preview"
+              style={{ "--preview": data.color } as React.CSSProperties}
+            >
+              <div>
+                <small>WELCOME TO</small>
+                <h2>{data.name || "Your business"}</h2>
+                <p>
+                  {data.description ||
+                    "Professional service, simple online booking."}
+                </p>
+                <button type="button">Book now</button>
+              </div>
+              <div className="preview-service">
+                <small>POPULAR SERVICE</small>
+                <b>{data.service || "Your first service"}</b>
+                <span>
+                  {data.duration} min · ${data.price || "0"}
+                </span>
+              </div>
+            </div>
+            {error && <div className="form-message">{error}</div>}
+          </form>
+        )}
+        <footer className="wizard-actions">
+          {step > 1 ? (
+            <button
+              className="btn btn-secondary"
+              onClick={() => setStep((s) => s - 1)}
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
+          ) : (
+            <span />
+          )}
+          <button
+            className="btn btn-primary"
+            disabled={
+              (step === 1 && !data.category) ||
+              (step === 2 && (!data.name || !data.slug)) ||
+              (step === 3 && !data.service) ||
+              busy
+            }
+            onClick={
+              step === 4
+                ? () => {
+                    const form = document.querySelector("form");
+                    form?.requestSubmit();
+                  }
+                : () => setStep((s) => s + 1)
+            }
+          >
+            {step === 4 ? (
+              busy ? (
+                "Creating…"
+              ) : (
+                "Create my Bookd site"
+              )
+            ) : (
+              <>
+                Continue <ArrowRight size={16} />
+              </>
+            )}
+          </button>
+        </footer>
+      </section>
+    </main>
+  );
+}
