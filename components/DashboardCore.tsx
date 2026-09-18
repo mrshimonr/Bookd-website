@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase";
 import CalendarCRM from "@/components/CalendarCRM";
+import BookingManagerCRM from "@/components/BookingManagerCRM";
+import RecordManagerCRM from "@/components/RecordManagerCRM";
 type Business = {
   id: string;
   name: string;
@@ -310,50 +312,11 @@ function renderTab(
       />
     );
   if (tab === "Bookings")
-    return (
-      <section>
-        <button className="btn btn-primary" onClick={() => p.open("booking")}>
-          + Create booking
-        </button>
-        <BookingList bookings={p.bookings} />
-      </section>
-    );
+    return <BookingManagerCRM businessId={p.business.id} />;
   if (tab === "Services")
-    return (
-      <section>
-        <button className="btn btn-primary" onClick={() => p.open("service")}>
-          + Add service
-        </button>
-        <div className="record-grid">
-          {p.services.map((s) => (
-            <article className="feature" key={s.id}>
-              <h3>{s.name}</h3>
-              <p>{s.description || "No description"}</p>
-              <b>
-                {s.duration_minutes} min · ${(s.price_cents / 100).toFixed(2)}
-              </b>
-            </article>
-          ))}
-        </div>
-      </section>
-    );
+    return <RecordManagerCRM businessId={p.business.id} kind="service" />;
   if (tab === "Customers")
-    return (
-      <section>
-        <button className="btn btn-primary" onClick={() => p.open("customer")}>
-          + Add customer
-        </button>
-        <div className="record-grid">
-          {p.customers.map((c) => (
-            <article className="feature" key={c.id}>
-              <h3>{c.full_name}</h3>
-              <p>{c.email || "No email"}</p>
-              <span>{c.phone || "No phone"}</span>
-            </article>
-          ))}
-        </div>
-      </section>
-    );
+    return <RecordManagerCRM businessId={p.business.id} kind="customer" />;
   if (tab === "Booking site" || tab === "Settings")
     return <SiteEditor business={p.business} save={p.saveSite} />;
   return (

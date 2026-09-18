@@ -9,6 +9,7 @@ check (payment_status in ('unpaid','deposit_due','deposit_paid','paid','partiall
 alter table public.bookings add column if not exists deposit_cents integer not null default 0;
 alter table public.customers add column if not exists custom_data jsonb not null default '{}';
 alter table public.services add column if not exists custom_data jsonb not null default '{}';
+alter table public.services add column if not exists deposit_cents integer not null default 0;
 alter table public.businesses add column if not exists crm_settings jsonb not null default '{"week_starts_on":0,"visible_sections":["overview","calendar","bookings","services","customers","staff","loyalty","reports","payments","settings"]}';
 
 create table if not exists public.custom_fields (
