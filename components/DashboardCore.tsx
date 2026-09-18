@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
@@ -20,6 +20,7 @@ import { getSupabaseBrowser } from "@/lib/supabase";
 import CalendarCRM from "@/components/CalendarCRM";
 import BookingManagerCRM from "@/components/BookingManagerCRM";
 import RecordManagerCRM from "@/components/RecordManagerCRM";
+import SettingsCRM, { CRMSettings } from "@/components/SettingsCRM";
 type Business = {
   id: string;
   name: string;
@@ -27,6 +28,7 @@ type Business = {
   description: string;
   published: boolean;
   theme: { color?: string };
+  crm_settings: CRMSettings;
 };
 type Service = {
   id: string;
@@ -87,7 +89,7 @@ export default function DashboardCore() {
     );
     let businessQuery = supabase
       .from("businesses")
-      .select("id,name,slug,description,published,theme")
+      .select("id,name,slug,description,published,theme,crm_settings")
       .eq("owner_id", user.id);
     if (selectedId) businessQuery = businessQuery.eq("id", selectedId);
     const { data: b } = await businessQuery.limit(1).maybeSingle();
@@ -206,8 +208,11 @@ export default function DashboardCore() {
         </div>
       </main>
     );
+  const visible=business?.crm_settings?.visible_sections||nav.map(x=>(x[1] as string).toLowerCase());
+  const shownNav=nav.filter(([,label])=>visible.includes((label as string).toLowerCase())||label==="Settings");
+  const shellStyle={"--brand":business?.crm_settings?.accent_color||business?.theme?.color||"#4f46e5"} as CSSProperties;
   return (
-    <main className="app-shell">
+    <main className={`app-shell crm-${business?.crm_settings?.display_style||"comfortable"}`} style={shellStyle}>
       <aside className="app-sidebar">
         <Link href="/account" className="brand" title="My businesses">
           <span className="brand-mark">B</span>Bookd
@@ -216,7 +221,7 @@ export default function DashboardCore() {
           <small>BUSINESS</small>
           <b>{business?.name}</b>
         </div>
-        {nav.map(([Icon, label]) => (
+        {shownNav.map(([Icon, label]) => (
           <button
             onClick={() => {
               setTab(label as string);
@@ -274,6 +279,7 @@ export default function DashboardCore() {
             bookings,
             open,
             saveSite,
+            updateSettings:(x)=>setBusiness(current=>current?{...current,crm_settings:x}:current),
           })}
       </section>
     </main>
@@ -288,6 +294,7 @@ function renderTab(
     bookings: Booking[];
     open: (x: string) => void;
     saveSite: (e: FormEvent<HTMLFormElement>) => void;
+    updateSettings: (x: CRMSettings) => void;
   },
 ) {
   if (tab === "Overview")
@@ -317,8 +324,10 @@ function renderTab(
     return <RecordManagerCRM businessId={p.business.id} kind="service" />;
   if (tab === "Customers")
     return <RecordManagerCRM businessId={p.business.id} kind="customer" />;
-  if (tab === "Booking site" || tab === "Settings")
+  if (tab === "Booking site")
     return <SiteEditor business={p.business} save={p.saveSite} />;
+  if (tab === "Settings")
+    return <SettingsCRM businessId={p.business.id} initial={p.business.crm_settings||{}} onSaved={p.updateSettings}/>;
   return (
     <article className="feature module-empty">
       <div className="empty-icon">

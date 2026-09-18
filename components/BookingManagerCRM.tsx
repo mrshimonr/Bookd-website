@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Edit3, Plus, Search, Trash2, X } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase";
+import CustomFieldInputs,{CustomField,customData} from "@/components/CustomFieldInputs";
 type Customer = { id: string; full_name: string };
 type Service = {
   id: string;
@@ -20,6 +21,7 @@ type Booking = {
   total_cents: number;
   deposit_cents: number;
   notes: string;
+  custom_data: Record<string,unknown>;
   customers: { full_name: string } | null;
   services: { name: string } | null;
 };
@@ -48,16 +50,17 @@ export default function BookingManagerCRM({
   const [bookings, setBookings] = useState<Booking[]>([]),
     [customers, setCustomers] = useState<Customer[]>([]),
     [services, setServices] = useState<Service[]>([]),
+    [customFields,setCustomFields]=useState<CustomField[]>([]),
     [editing, setEditing] = useState<Booking | null | "new">(null),
     [search, setSearch] = useState(""),
     [status, setStatus] = useState("all"),
     [notice, setNotice] = useState("");
   async function load() {
-    const [{ data: b }, { data: c }, { data: s }] = await Promise.all([
+    const [{ data: b }, { data: c }, { data: s },{data:f}] = await Promise.all([
       supabase
         .from("bookings")
         .select(
-          "id,customer_id,service_id,starts_at,ends_at,status,payment_status,total_cents,deposit_cents,notes,customers(full_name),services(name)",
+          "id,customer_id,service_id,starts_at,ends_at,status,payment_status,total_cents,deposit_cents,notes,custom_data,customers(full_name),services(name)",
         )
         .eq("business_id", businessId)
         .order("starts_at", { ascending: false }),
@@ -72,10 +75,12 @@ export default function BookingManagerCRM({
         .eq("business_id", businessId)
         .eq("active", true)
         .order("name"),
+      supabase.from("custom_fields").select("id,label,field_key,field_type,required,visible,options").eq("business_id",businessId).eq("entity_type","booking").order("display_order"),
     ]);
     setBookings((b || []) as unknown as Booking[]);
     setCustomers(c || []);
     setServices(s || []);
+    setCustomFields((f||[]) as CustomField[]);
   }
   useEffect(() => {
     load();
@@ -97,6 +102,7 @@ export default function BookingManagerCRM({
         total_cents: Math.round(Number(d.get("total")) * 100),
         deposit_cents: Math.round(Number(d.get("deposit")) * 100),
         notes: d.get("notes"),
+        custom_data:customData(d,customFields),
       };
     const result =
       editing === "new"
@@ -304,6 +310,7 @@ export default function BookingManagerCRM({
                 defaultValue={editing === "new" ? "" : editing.notes}
               />
             </label>
+            <CustomFieldInputs fields={customFields} values={editing==="new"?{}:editing.custom_data||{}}/>
             <div className="modal-actions">
               <button
                 type="button"

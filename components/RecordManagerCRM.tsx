@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Edit3, Plus, Search, Trash2, X } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase";
+import CustomFieldInputs,{CustomField,customData} from "@/components/CustomFieldInputs";
 type Kind = "customer" | "service";
 type RecordItem = {
   id: string;
@@ -15,6 +16,7 @@ type RecordItem = {
   price_cents?: number;
   deposit_cents?: number;
   active?: boolean;
+  custom_data?: Record<string,unknown>;
 };
 export default function RecordManagerCRM({
   businessId,
@@ -26,16 +28,14 @@ export default function RecordManagerCRM({
   const supabase = getSupabaseBrowser(),
     table = kind === "customer" ? "customers" : "services";
   const [items, setItems] = useState<RecordItem[]>([]),
+    [customFields,setCustomFields]=useState<CustomField[]>([]),
     [editing, setEditing] = useState<RecordItem | null | "new">(null),
     [search, setSearch] = useState(""),
     [notice, setNotice] = useState("");
   async function load() {
-    const { data } = await supabase
-      .from(table)
-      .select("*")
-      .eq("business_id", businessId)
-      .order(kind === "customer" ? "full_name" : "name");
+    const [{data},{data:f}]=await Promise.all([supabase.from(table).select("*").eq("business_id", businessId).order(kind === "customer" ? "full_name" : "name"),supabase.from("custom_fields").select("id,label,field_key,field_type,required,visible,options").eq("business_id",businessId).eq("entity_type",kind).order("display_order")]);
     setItems(data || []);
+    setCustomFields((f||[]) as CustomField[]);
   }
   useEffect(() => {
     load();
@@ -50,6 +50,7 @@ export default function RecordManagerCRM({
               email: d.get("email"),
               phone: d.get("phone"),
               notes: d.get("notes"),
+              custom_data:customData(d,customFields),
             }
           : {
               name: d.get("name"),
@@ -58,6 +59,7 @@ export default function RecordManagerCRM({
               price_cents: Math.round(Number(d.get("price")) * 100),
               deposit_cents: Math.round(Number(d.get("deposit")) * 100),
               active: d.get("active") === "on",
+              custom_data:customData(d,customFields),
             };
     const result =
       editing === "new"
@@ -240,6 +242,7 @@ export default function RecordManagerCRM({
                 </label>
               </>
             )}
+            <CustomFieldInputs fields={customFields} values={editing==="new"?{}:editing.custom_data||{}}/>
             <div className="modal-actions">
               <button
                 type="button"
