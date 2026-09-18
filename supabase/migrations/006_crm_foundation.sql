@@ -27,6 +27,7 @@ create table if not exists public.custom_fields (
 );
 alter table public.custom_fields enable row level security;
 grant select, insert, update, delete on public.custom_fields to authenticated;
+drop policy if exists "members manage custom fields" on public.custom_fields;
 create policy "members manage custom fields" on public.custom_fields for all
 using (public.is_business_member(business_id))
 with check (public.is_business_member(business_id));
